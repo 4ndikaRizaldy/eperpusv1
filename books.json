@@ -1,0 +1,20 @@
+[
+    {
+        "title": "DPK 2 TKJ",
+        "author": "Rizaldy",
+        "file": "dpk_2_tkj.pdf",
+        "cover": "dpk_2_tkj.jpg",
+        "category": "Fiksi",
+        "read_count": 13,
+        "view_count": 7
+    },
+    {
+        "title": "C",
+        "author": "Dika",
+        "file": "c.pdf",
+        "cover": "c.jpg",
+        "category": "Sains",
+        "read_count": 5,
+        "view_count": 9
+    }
+]

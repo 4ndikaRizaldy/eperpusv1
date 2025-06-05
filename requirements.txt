@@ -1,3 +1,4 @@
 streamlit>=1.27
 Pillow
 plotly
+streamlit-lottie

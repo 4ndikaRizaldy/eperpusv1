@@ -5,8 +5,17 @@ from PIL import Image
 import base64
 import time
 import plotly.express as px
+from streamlit_lottie import st_lottie
+import json
 
 ADMIN_PASSWORD = "admin123"
+
+# Fungsi untuk load Lottie JSON dari file
+def load_lottie_file(filepath: str):
+    with open(filepath, "r") as f:
+        return json.load(f)
+    
+    
 # Fungsi untuk memuat data buku
 def load_books():
     if not os.path.exists("books.json"):
@@ -67,6 +76,28 @@ def render_stats():
         )
         st.plotly_chart(fig)
 
+
+def render_loading_page():
+    st.markdown("## 📖 Sedang memuat...")
+    lottie_animation = load_lottie_file("assets/loading.json")
+    st_lottie(lottie_animation, height=300)
+    time.sleep(1.5)
+
+    target = st.session_state.get("loading_target")
+
+    # Selesaikan loading
+    st.session_state.loading = False
+    st.session_state.loading_target = None
+
+    if target == "read_book":
+        # Langsung lanjut ke tampilan buku
+        st.rerun()
+    elif target == "homepage":
+        # Reset selected_book (sudah dilakukan saat klik tombol kembali)
+        st.rerun()
+
+
+
 # Tampilan daftar buku
 def render_book_list(books, keyword=""):
     st.subheader("📖 Koleksi Buku Tersedia")
@@ -98,47 +129,83 @@ def render_book_list(books, keyword=""):
 
             if st.button(f"Baca", key=f"read_{idx}"):
                 st.session_state.selected_book = book
+                st.session_state.loading = True
+                st.session_state.loading_target = "read_book"
+                st.session_state.view_tracked = False
                 st.rerun()
+
+                
+
+
 
 # Fungsi utama homepage
 def homepage():
+    if st.session_state.get("loading", False):
+        render_loading_page()
+        return
+
+    if st.session_state.get("selected_book"):
+        show_book_reader(st.session_state.selected_book)
+        return
+
     render_header()
     books = load_books()
     render_most_popular_books(books)
 
-    # Input pencarian & kategori
-    cols = st.columns([2, 1])
+    # ─── Baris atas: Search + ikon Filter & Sort ─────────────────────────────
+    cols = st.columns([6, 1, 1])
     with cols[0]:
-        search = st.text_input("🔎 Cari buku (judul/penulis):")
+        search = st.text_input("🔍 Cari Buku (Judul / Penulis):", label_visibility="collapsed")
     with cols[1]:
-        categories = ["Semua"] + sorted(list({b.get("category", "Lainnya") for b in books}))
-        selected_category = st.selectbox("📂 Kategori", categories)
+        show_filter = st.button("📂", help="Filter Kategori")
+    with cols[2]:
+        show_sort = st.button("↕️", help="Urutkan")
 
-    # Filter berdasarkan kategori
-    if selected_category != "Semua":
-        books = [b for b in books if b.get("category") == selected_category]
+    # ─── FILTER: Tampilkan jika tombol ditekan ────────────────────────────────
+    if "show_filter" not in st.session_state:
+        st.session_state.show_filter = False
+    if show_filter:
+        st.session_state.show_filter = not st.session_state.show_filter
 
-    # 🔽 Tambahan: Pilihan urutan
-    sort_option = st.selectbox(
-        "↕️ Urutkan berdasarkan",
-        ["Judul (A-Z)", "Judul (Z-A)", "Penulis", "Populer (Paling Banyak Dibaca)", "Kategori"]
-    )
+    if st.session_state.show_filter:
+        with st.expander("📂 Filter Kategori", expanded=True):
+            categories = ["📚 Semua"] + sorted(list({f"📂 {b.get('category', 'Lainnya')}" for b in books}))
+            selected_category = st.selectbox("🗃️ Pilih Kategori", categories)
+            if selected_category != "📚 Semua":
+                category_name = selected_category.replace("📂 ", "")
+                books = [b for b in books if b.get("category") == category_name]
 
-    # 🔽 Lakukan pengurutan berdasarkan pilihan
-    if sort_option == "Judul (A-Z)":
-        books = sorted(books, key=lambda x: x["title"].lower())
-    elif sort_option == "Judul (Z-A)":
-        books = sorted(books, key=lambda x: x["title"].lower(), reverse=True)
-    elif sort_option == "Penulis":
-        books = sorted(books, key=lambda x: x["author"].lower())
-    elif sort_option == "Populer (Paling Banyak Dibaca)":
-        books = sorted(books, key=lambda x: x.get("view_count", 0), reverse=True)
-    elif sort_option == "Kategori":
-        books = sorted(books, key=lambda x: x.get("category", "").lower())
+    # ─── SORT: Tampilkan jika tombol ditekan ──────────────────────────────────
+    if "show_sort" not in st.session_state:
+        st.session_state.show_sort = False
+    if show_sort:
+        st.session_state.show_sort = not st.session_state.show_sort
 
+    if st.session_state.show_sort:
+        with st.expander("↕️ Urutkan Berdasarkan", expanded=True):
+            sort_option = st.selectbox(
+                "🔽 Pilih Urutan",
+                [
+                    "📘 Judul (A-Z)",
+                    "📕 Judul (Z-A)",
+                    "✍️ Penulis",
+                    "🔥 Populer (Paling Banyak Dibaca)",
+                    "🗂️ Kategori"
+                ]
+            )
+            if sort_option == "📘 Judul (A-Z)":
+                books = sorted(books, key=lambda x: x["title"].lower())
+            elif sort_option == "📕 Judul (Z-A)":
+                books = sorted(books, key=lambda x: x["title"].lower(), reverse=True)
+            elif sort_option == "✍️ Penulis":
+                books = sorted(books, key=lambda x: x["author"].lower())
+            elif sort_option == "🔥 Populer (Paling Banyak Dibaca)":
+                books = sorted(books, key=lambda x: x.get("view_count", 0), reverse=True)
+            elif sort_option == "🗂️ Kategori":
+                books = sorted(books, key=lambda x: x.get("category", "").lower())
+
+    # ─── Tampilkan hasil ──────────────────────────────────────────────────────
     render_book_list(books, keyword=search)
-
-    
 
 def show_book_reader(book):
     st.title(book['title'])
@@ -172,9 +239,11 @@ def show_book_reader(book):
 
     # Tombol kembali
     if st.button("⬅ Kembali ke Beranda"):
+        st.session_state.loading = True
+        st.session_state.loading_target = "homepage"
         st.session_state.selected_book = None
-        st.session_state.view_tracked = False  # Reset flag
         st.rerun()
+
 
 
 # Tambah Buku – hanya untuk admin
@@ -315,16 +384,27 @@ def render_most_popular_books(books, top_n=5):
         
 # Fungsi utama
 def main():
-    st.set_page_config(page_title="E-Perpustakaan", layout="wide")
+    st.set_page_config(page_title="E-Perpustakaan", page_icon="📚", layout="wide")
 
     # Inisialisasi sesi
+    # Inisialisasi di awal main()
     if "selected_book" not in st.session_state:
         st.session_state.selected_book = None
+    if "loading" not in st.session_state:
+        st.session_state.loading = False
+    if "loading_target" not in st.session_state:
+        st.session_state.loading_target = None
+
     if "admin_logged_in" not in st.session_state:
         st.session_state.admin_logged_in = False
 
     # 📖 Load buku
     books = load_books()
+    # Tampilkan loading page jika sedang loading
+    if st.session_state.get("loading", False):
+        render_loading_page()
+        return
+
     
     # Sidebar
     with st.sidebar:

@@ -35,7 +35,7 @@ def save_books(books):
 # Header utama
 def render_header():
     st.markdown("""
-        <h1 style='text-align: center; color: navy;'>📚 E-Perpustakaan</h1>
+        <h1 style='text-align: center; color: green;'>📚 E-Perpustakaan</h1>
         <p style='text-align: center;'>Temukan dan baca koleksi buku digital favoritmu langsung dari browser!</p>
         <hr>
     """, unsafe_allow_html=True)
@@ -98,10 +98,10 @@ def render_loading_page():
 
 
 
-# Tampilan daftar buku
 def render_book_list(books, keyword=""):
     st.subheader("📖 Koleksi Buku Tersedia")
 
+    # Filter keyword
     if keyword:
         books = [
             book for book in books
@@ -112,8 +112,21 @@ def render_book_list(books, keyword=""):
         st.info("Buku tidak ditemukan.")
         return
 
+    # Konfigurasi pagination
+    books_per_page = 6
+    total_pages = (len(books) - 1) // books_per_page + 1
+
+    if "book_page" not in st.session_state:
+        st.session_state.book_page = 0
+
+    # Data untuk halaman saat ini
+    start = st.session_state.book_page * books_per_page
+    end = start + books_per_page
+    page_books = books[start:end]
+
+    # Tampilkan buku
     cols = st.columns(3)
-    for idx, book in enumerate(books):
+    for idx, book in enumerate(page_books):
         with cols[idx % 3]:
             try:
                 cover_path = os.path.join("covers", book["cover"])
@@ -126,15 +139,32 @@ def render_book_list(books, keyword=""):
             st.markdown(f"_oleh {book['author']}_")
             st.caption(f"📂 {book.get('category', 'Lainnya')}")
 
-
-            if st.button(f"Baca", key=f"read_{idx}"):
+            if st.button(f"Baca", key=f"read_{start + idx}"):
                 st.session_state.selected_book = book
                 st.session_state.loading = True
                 st.session_state.loading_target = "read_book"
                 st.session_state.view_tracked = False
                 st.rerun()
 
-                
+    # ─── Pagination di bawah daftar buku ───────────────────────
+    st.markdown("---")
+    col_prev, col_page, col_next = st.columns([1, 2, 1])
+    with col_prev:
+        if st.button("⬅️ Sebelumnya", disabled=st.session_state.book_page == 0):
+            st.session_state.book_page -= 1
+            st.rerun()
+
+    with col_page:
+        st.markdown(
+            f"<div style='text-align: center; font-size: 16px;'>Halaman {st.session_state.book_page + 1} dari {total_pages}</div>",
+            unsafe_allow_html=True,
+        )
+
+    with col_next:
+        if st.button("➡️ Selanjutnya", disabled=st.session_state.book_page == total_pages - 1):
+            st.session_state.book_page += 1
+            st.rerun()
+
 
 
 
@@ -153,13 +183,13 @@ def homepage():
     render_most_popular_books(books)
 
     # ─── Baris atas: Search + ikon Filter & Sort ─────────────────────────────
-    cols = st.columns([6, 1, 1])
+    cols = st.columns([6, 0.4, 0.4])
     with cols[0]:
-        search = st.text_input("🔍 Cari Buku (Judul / Penulis):", label_visibility="collapsed")
+        search = st.text_input("🔍 Cari Buku (Judul / Penulis):", label_visibility="collapsed", placeholder="Cari Buku...")
     with cols[1]:
-        show_filter = st.button("📂", help="Filter Kategori")
+        show_filter = st.button("☰", help="Filter Kategori")
     with cols[2]:
-        show_sort = st.button("↕️", help="Urutkan")
+        show_sort = st.button("▼", help="Urutkan")
 
     # ─── FILTER: Tampilkan jika tombol ditekan ────────────────────────────────
     if "show_filter" not in st.session_state:
@@ -168,14 +198,13 @@ def homepage():
         st.session_state.show_filter = not st.session_state.show_filter
 
     if st.session_state.show_filter:
-        with st.expander("📂 Filter Kategori", expanded=True):
-            categories = ["📚 Semua"] + sorted(list({f"📂 {b.get('category', 'Lainnya')}" for b in books}))
-            selected_category = st.selectbox("🗃️ Pilih Kategori", categories)
-            if selected_category != "📚 Semua":
-                category_name = selected_category.replace("📂 ", "")
-                books = [b for b in books if b.get("category") == category_name]
+        categories = ["📚 Semua"] + sorted(list({f"📂 {b.get('category', 'Lainnya')}" for b in books}))
+        selected_category = st.selectbox("📂", categories, label_visibility="collapsed")
+        
+        if selected_category != "📚 Semua":
+            category_name = selected_category.replace("📂 ", "")
+            books = [b for b in books if b.get("category") == category_name]
 
-    # ─── SORT: Tampilkan jika tombol ditekan ──────────────────────────────────
     if "show_sort" not in st.session_state:
         st.session_state.show_sort = False
     if show_sort:
@@ -184,15 +213,18 @@ def homepage():
     if st.session_state.show_sort:
         with st.expander("↕️ Urutkan Berdasarkan", expanded=True):
             sort_option = st.selectbox(
-                "🔽 Pilih Urutan",
+                "🔽",
                 [
                     "📘 Judul (A-Z)",
                     "📕 Judul (Z-A)",
                     "✍️ Penulis",
                     "🔥 Populer (Paling Banyak Dibaca)",
                     "🗂️ Kategori"
-                ]
+                ],
+                label_visibility="collapsed"
             )
+
+            # Sorting logic
             if sort_option == "📘 Judul (A-Z)":
                 books = sorted(books, key=lambda x: x["title"].lower())
             elif sort_option == "📕 Judul (Z-A)":
@@ -206,6 +238,14 @@ def homepage():
 
     # ─── Tampilkan hasil ──────────────────────────────────────────────────────
     render_book_list(books, keyword=search)
+
+    # ─── Footer ───────────────────────────────────────────────────────────────
+    st.markdown("""
+        <footer style="text-align: center; padding: 20px; font-size: 14px; color: gray;">
+            <p>© 2025 Andika Rizaldy. Semua hak cipta dilindungi.</p>
+        </footer>
+    """, unsafe_allow_html=True)
+
 
 def show_book_reader(book):
     st.title(book['title'])
@@ -381,13 +421,47 @@ def render_most_popular_books(books, top_n=5):
         st.markdown(f"**{idx+1}. {book['title']}** oleh {book['author']}")
         st.caption(f"📊 Dilihat {book.get('view_count', 0)} kali")
 
+def render_landing_page():
+    st.markdown("""
+        <div style='text-align: center; padding: 50px;'>
+            <h1>📚 Selamat Datang di E-Perpustakaan!</h1>
+            <p>Temukan dan baca koleksi buku digital favoritmu langsung dari browser.</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    lottie_animation = load_lottie_file("assets/welcome.json")  # Pastikan file ada
+    st_lottie(lottie_animation, height=300)
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("📖 Baca Sekarang!", use_container_width=True):
+            st.session_state.show_landing = False
+            st.rerun()
+
+    # Footer
+    st.markdown("""
+        <hr style='margin-top: 50px;'>
+        <div style='text-align: center; color: gray; font-size: 14px;'>
+            © 2025 Andika Rizaldy. All rights reserved.
+        </div>
+    """, unsafe_allow_html=True)
+
+
+
         
 # Fungsi utama
 def main():
+    if "show_landing" not in st.session_state:
+        st.session_state.show_landing = True
     st.set_page_config(page_title="E-Perpustakaan", page_icon="📚", layout="wide")
+
+    if st.session_state.get("show_landing", True):
+        render_landing_page()
+        return
 
     # Inisialisasi sesi
     # Inisialisasi di awal main()
+
     if "selected_book" not in st.session_state:
         st.session_state.selected_book = None
     if "loading" not in st.session_state:
